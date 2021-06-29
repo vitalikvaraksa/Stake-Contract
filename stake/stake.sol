@@ -1,8 +1,4 @@
 /**
- *Submitted for verification at Etherscan.io on 2021-06-29
-*/
-
-/**
  *Submitted for verification at BscScan.com on 2021-06-25
 */
 
@@ -737,15 +733,21 @@ contract Stake is Ownable {
         
         token.transferFrom(sender, mainWallet, _amount);
         
-        HasStake[sender]          =  true;
-        StartDate[sender]         =  now;
-        Staked[sender]            =  _amount;
-        Returned[sender]        =  0;
+        HasStake[sender] = true;
+        Staked[sender] = _amount;
+        StartDate[sender] = now;
+        Returned[sender] = 0;
     }
-
-    function recoverBEP20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        IBEP20(tokenAddress).transfer(this.owner(), tokenAmount);
-        emit Recovered(tokenAddress, tokenAmount);
+    
+    function stakeStatus() public view returns(bool HasStakeStatus, uint StakedTotal, uint StartDateValue, uint LastWithdrawDateValue, uint ReturnedTotal) {
+         address sender = msg.sender;
+         require(HasStake[sender], "Your wallet address don't have active Stake!");
+         
+         HasStakeStatus              = HasStake[sender];
+         StakedTotal                 = Staked[sender];
+         StartDateValue              = StartDate[sender];
+         ReturnedTotal               = Returned[sender];
+         LastWithdrawDateValue       = LastWithdrawDate[sender];
     }
 
     function setWithdrawAddress(address payable _address) external onlyOwner {
