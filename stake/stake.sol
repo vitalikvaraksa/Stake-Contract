@@ -603,7 +603,8 @@ contract Stake is Ownable {
     
     uint public dailyEarningPercent  = 80;
     uint public stakeDuration = 300;
-    uint256 public limitStakeTokens = 50000000;
+    uint tokenDecimal = 18;
+    uint256 public limitStakeTokens = 50000000 * (10 ** 18);
     
     constructor(STAKETOKEN _token) public {
         token = _token;
@@ -627,6 +628,7 @@ contract Stake is Ownable {
         HasStake[sender] = true;
         Staked[sender] = _amount;
         StartDate[sender] = now;
+        LastWithdrawDate[sender] = 0;
         Returned[sender] = 0;
     }
     
@@ -637,8 +639,51 @@ contract Stake is Ownable {
          HasStakeStatus              = HasStake[sender];
          StakedTotal                 = Staked[sender];
          StartDateValue              = StartDate[sender];
-         ReturnedTotal               = Returned[sender];
          LastWithdrawDateValue       = LastWithdrawDate[sender];
+         ReturnedTotal               = Returned[sender];
+    }
+    
+    function withdrawDailyEarning() public {
+         address sender = msg.sender;
+         require(HasStake[sender], "Your wallet address don't have active Stake!");
+         
+         if (LastWithdrawDate[sender] != 0) {
+             // diff days From Start Date To Last Withdraw Date
+             uint dw  = BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], LastWithdrawDate[sender]);
+             // if dw highr from 300(default stakeDuration) day cann't get earning
+             require(dw < stakeDuration, " Your Stake duration has finished!");
+         }
+            
+         // date now
+         uint dateNow = now;
+
+         // date last withdraw 
+         uint date = LastWithdrawDate[sender];
+         if (LastWithdrawDate[sender] == 0) {  date = StartDate[sender]; }
+         
+         // get diffrent days
+         uint diffDays = BokkyPooBahsDateTimeLibrary.diffDays(date, dateNow);
+         
+         // check if diffrent days > 0
+         require(diffDays > 0, "You can send withdraw request tomorrow"); 
+         
+         
+         uint elapsedDaysFromStart = BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], dateNow);
+         if (elapsedDaysFromStart > stakeDuration) {
+             diffDays = stakeDuration - BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], LastWithdrawDate[sender]);
+         }
+         
+         // return amount so far
+         uint256 returnAmount = diffDays.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
+         
+         // send daily earnings to sender 
+         token.transferFrom(mainWallet, sender, returnAmount);
+         
+         // set last withdraw date 
+         LastWithdrawDate[sender]  = BokkyPooBahsDateTimeLibrary.addDays(date, diffDays);
+         
+         // set returned total 
+         Returned[sender]  = Returned[sender] + returnAmount ;
     }
 
     function setWithdrawAddress(address payable _address) external onlyOwner {
@@ -658,7 +703,7 @@ contract Stake is Ownable {
     }
     
     function setLimitStakeTokens (uint256 limit) public onlyOwner {
-        limitStakeTokens = limit;
+        limitStakeTokens = limit * (10 ** 18);
     }
     
     event Deposited(address indexed user, uint256 amount);
