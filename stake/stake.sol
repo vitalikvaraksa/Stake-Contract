@@ -643,7 +643,7 @@ contract Stake is Ownable {
          ReturnedTotal               = Returned[sender];
     }
     
-    function withdrawDailyEarning() public {
+    function rewardDailyEarning() public {
          address sender = msg.sender;
          require(HasStake[sender], "Your wallet address don't have active Stake!");
          
