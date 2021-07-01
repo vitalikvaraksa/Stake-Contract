@@ -587,6 +587,7 @@ pragma solidity ^0.6.0;
 interface STAKETOKEN {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+    function decimals() external view returns (uint8);
 }
 
 contract Stake is Ownable {
@@ -603,7 +604,8 @@ contract Stake is Ownable {
     
     uint public dailyEarningPercent  = 80;
     uint public stakeDuration = 300;
-    uint256 public limitStakeTokens = 50000000 * (10 ** 18);
+    uint decimal = token.decimals();
+    uint256 public limitStakeTokens = 50000000 * (10 ** decimal);
     
     constructor(STAKETOKEN _token) public {
         token = _token;
@@ -706,7 +708,7 @@ contract Stake is Ownable {
     }
     
     function setLimitStakeTokens (uint256 limit) public onlyOwner {
-        limitStakeTokens = limit * (10 ** 18);
+        limitStakeTokens = limit * (10 ** decimal);
     }
     
     event Deposited(address indexed user, uint256 amount);
