@@ -670,7 +670,11 @@ contract Stake is Ownable {
          
          uint elapsedDaysFromStart = BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], dateNow);
          if (elapsedDaysFromStart > stakeDuration) {
-             diffDays = stakeDuration - BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], LastWithdrawDate[sender]);
+             if (LastWithdrawDate[sender] != 0) {
+                 diffDays = stakeDuration - BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], LastWithdrawDate[sender]);
+             } else {
+                 diffDays = stakeDuration;
+             }
          }
          
          // return amount so far
