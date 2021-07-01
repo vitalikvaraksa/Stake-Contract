@@ -621,11 +621,12 @@ contract Stake is Ownable {
     function createStake(uint256 _amount) public 
     {
         address sender = msg.sender;
-        require(_amount < limitStakeTokens, "Stake Amount must be less than MAX_STAKE_NUMBER");
+        require(totalStakedTokens + _amount < limitStakeTokens, "Stake Amount must be less than MAX_STAKEABLE_NUMBER");
         require(!HasStake[sender], "Your wallet address have already a active Stake!");
         
         token.transferFrom(sender, mainWallet, _amount);
         
+        totalStakedTokens = totalStakedTokens + _amount;
         HasStake[sender] = true;
         Staked[sender] = _amount;
         StartDate[sender] = now;
