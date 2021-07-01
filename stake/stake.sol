@@ -603,7 +603,6 @@ contract Stake is Ownable {
     
     uint public dailyEarningPercent  = 80;
     uint public stakeDuration = 300;
-    uint tokenDecimal = 18;
     uint256 public limitStakeTokens = 50000000 * (10 ** 18);
     
     constructor(STAKETOKEN _token) public {
