@@ -621,6 +621,7 @@ contract Stake is Ownable {
     function createStake(uint256 _amount) public 
     {
         address sender = msg.sender;
+        require(_amount > 0, "Stake Amount must be greater than 0");
         require(totalStakedTokens + _amount < limitStakeTokens, "Stake Amount must be less than MAX_STAKEABLE_NUMBER");
         require(!HasStake[sender], "Your wallet address have already a active Stake!");
         
