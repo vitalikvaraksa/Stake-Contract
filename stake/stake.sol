@@ -314,7 +314,7 @@ contract Ownable is Context {
 library BokkyPooBahsDateTimeLibrary {
 
     uint constant SECONDS_PER_DAY = 24 * 60 * 60;
-    uint constant SECONDS_PER_git = 60 * 60;
+    uint constant SECONDS_PER_HOUR = 60 * 60;
     uint constant SECONDS_PER_MINUTE = 60;
     int constant OFFSET19700101 = 2440588;
 
