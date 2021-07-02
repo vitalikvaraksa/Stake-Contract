@@ -587,7 +587,6 @@ pragma solidity ^0.6.0;
 interface STAKETOKEN {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
-    function decimals() external view returns (uint8);
 }
 
 contract Stake is Ownable {
@@ -595,17 +594,17 @@ contract Stake is Ownable {
     
     STAKETOKEN public token;
     address public mainWallet;
+    uint256 public totalStakedTokens = 0;
     
     mapping(address => uint256) public Staked; // total Staked for sender
     mapping(address => bool) public HasStake;
     mapping(address => uint256) public StartDate;
     mapping(address => uint256) public LastWithdrawDate;
-    mapping(address => uint256) public Returned;
+    mapping(address => uint256) public Claimed;
     
     uint public dailyEarningPercent  = 80;
     uint public stakeDuration = 300;
-    uint decimal = token.decimals();
-    uint256 public limitStakeTokens = 50000000 * (10 ** decimal);
+    uint256 public limitStakeTokens = 10000 * (10 ** 5);
     
     constructor(STAKETOKEN _token) public {
         token = _token;
@@ -621,29 +620,62 @@ contract Stake is Ownable {
     function createStake(uint256 _amount) public 
     {
         address sender = msg.sender;
-        require(_amount > 0, "Stake Amount must be greater than 0");
         require(totalStakedTokens + _amount < limitStakeTokens, "Stake Amount must be less than MAX_STAKEABLE_NUMBER");
-        require(!HasStake[sender], "Your wallet address have already a active Stake!");
         
         token.transferFrom(sender, mainWallet, _amount);
         
         totalStakedTokens = totalStakedTokens + _amount;
-        HasStake[sender] = true;
-        Staked[sender] = _amount;
+        if (!HasStake[sender]) {
+            Staked[sender] = _amount;
+            HasStake[sender] = true;
+        } else {
+            Staked[sender] = Staked[sender] + _amount;
+        }
+
         StartDate[sender] = now;
         LastWithdrawDate[sender] = 0;
-        Returned[sender] = 0;
+        Claimed[sender] = 0;
     }
     
-    function stakeStatus() public view returns(bool HasStakeStatus, uint StakedTotal, uint StartDateValue, uint LastWithdrawDateValue, uint ReturnedTotal) {
+    function stakeStatus() public view returns(bool HasStakeStatus, uint ClimableTokens, uint ClaimedTotal, uint StakedTotal, uint ExpectedCommission, uint StartDateValue, uint LastWithdrawDateValue) {
          address sender = msg.sender;
          require(HasStake[sender], "Your wallet address don't have active Stake!");
          
          HasStakeStatus              = HasStake[sender];
+         ClaimedTotal                = Claimed[sender];
          StakedTotal                 = Staked[sender];
          StartDateValue              = StartDate[sender];
          LastWithdrawDateValue       = LastWithdrawDate[sender];
-         ReturnedTotal               = Returned[sender];
+         
+         // date now
+         uint dateNow = now;
+         // date last withdraw 
+         uint date = LastWithdrawDate[sender];  
+         if (LastWithdrawDate[sender] == 0) {
+             date = StartDate[sender];
+             ExpectedCommission = stakeDuration.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
+         } else {
+             uint expectedDays = stakeDuration - BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], LastWithdrawDate[sender]);
+             ExpectedCommission = expectedDays.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
+         }
+         
+         // get diffrent Days
+         uint diffDays = BokkyPooBahsDateTimeLibrary.diffDays(date, dateNow);
+         
+         // check if diffrent days > 0
+         if (diffDays > 0) {
+             uint elapsedDaysFromStart = BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], dateNow);
+             if (elapsedDaysFromStart > stakeDuration) {
+                 if (LastWithdrawDate[sender] != 0) {
+                     diffDays = stakeDuration - BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], LastWithdrawDate[sender]);
+                 } else {
+                     diffDays = stakeDuration;
+                 }
+             }
+             ClimableTokens = diffDays.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
+         } else {
+             ClimableTokens = 0;
+         }
     }
     
     function rewardDailyEarning() public {
@@ -668,7 +700,7 @@ contract Stake is Ownable {
          uint diffDays = BokkyPooBahsDateTimeLibrary.diffDays(date, dateNow);
          
          // check if diffrent days > 0
-         require(diffDays > 0, "You can send withdraw request tomorrow"); 
+         require(diffDays > 0, "You can send withdraw request next day"); 
          
          
          uint elapsedDaysFromStart = BokkyPooBahsDateTimeLibrary.diffDays(StartDate[sender], dateNow);
@@ -690,7 +722,7 @@ contract Stake is Ownable {
          LastWithdrawDate[sender]  = BokkyPooBahsDateTimeLibrary.addDays(date, diffDays);
          
          // set returned total 
-         Returned[sender]  = Returned[sender] + returnAmount ;
+         Claimed[sender]  = Claimed[sender] + returnAmount ;
     }
 
     function setWithdrawAddress(address payable _address) external onlyOwner {
@@ -710,7 +742,7 @@ contract Stake is Ownable {
     }
     
     function setLimitStakeTokens (uint256 limit) public onlyOwner {
-        limitStakeTokens = limit * (10 ** decimal);
+        limitStakeTokens = limit;
     }
     
     event Deposited(address indexed user, uint256 amount);
