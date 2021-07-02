@@ -596,11 +596,20 @@ contract Stake is Ownable {
     address public mainWallet;
     uint256 public totalStakedTokens = 0;
     
-    mapping(address => uint256) public Staked; // total Staked for sender
+    
     mapping(address => bool) public HasStake;
-    mapping(address => uint256) public StartDate;
+    
+    struct stakeInfo{
+        uint256 StartDate;
+        uint256 LastWithdrawDate;
+        uint256 Claimed;
+        uint256 Staked;
+    }
+    mapping(address => stakeInfo[]) StakingInfo;
+    
+    /*mapping(address => uint256) public StartDate;
     mapping(address => uint256) public LastWithdrawDate;
-    mapping(address => uint256) public Claimed;
+    mapping(address => uint256) public Claimed;*/
     
     uint public dailyEarningPercent  = 80;
     uint public stakeDuration = 300;
@@ -625,104 +634,153 @@ contract Stake is Ownable {
         token.transferFrom(sender, mainWallet, _amount);
         
         totalStakedTokens = totalStakedTokens + _amount;
-        if (!HasStake[sender]) {
-            Staked[sender] = _amount;
-            HasStake[sender] = true;
-        } else {
-            Staked[sender] = Staked[sender] + _amount;
-        }
 
-        StartDate[sender] = now;
-        LastWithdrawDate[sender] = 0;
-        Claimed[sender] = 0;
+        HasStake[sender] = true;
+        StakingInfo[sender].push(stakeInfo(now, 0, 0, _amount));
     }
     
-    function stakeStatus() public view returns(bool HasStakeStatus, uint ClimableTokens, uint ClaimedTotal, uint StakedTotal, uint ExpectedCommission, uint StartDateValue, uint LastWithdrawDateValue) {
+    function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint j = _i;
+        uint len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint k = len - 1;
+        while (_i != 0) {
+            bstr[k--] = byte(uint8(48 + _i % 10));
+            _i /= 10;
+        }
+        return string(bstr);
+    }
+    
+    function stakeStatus() public view returns(string memory) {
+         bytes memory strByte;
          address sender = msg.sender;
          require(HasStake[sender], "Your wallet address don't have active Stake!");
          
-         HasStakeStatus              = HasStake[sender];
-         ClaimedTotal                = Claimed[sender];
-         StakedTotal                 = Staked[sender];
-         StartDateValue              = StartDate[sender];
-         LastWithdrawDateValue       = LastWithdrawDate[sender];
+         uint ClaimedTotal = 0;
+         uint StakedTotal = 0;
+         uint StartDateValue = 0;
+         uint LastWithdrawDateValue = 0;
+         uint ExpectedCommission = 0;
+         uint ClimableTokens = 0;
          
-         // date now
-         uint dateNow = now;
-         // date last withdraw 
-         uint date = LastWithdrawDate[sender];
-         if (LastWithdrawDate[sender] == 0) {
-             date = StartDate[sender];
-             ExpectedCommission = stakeDuration.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
-         } else {
-             uint expectedHours = stakeDuration - BokkyPooBahsDateTimeLibrary.diffHours(StartDate[sender], LastWithdrawDate[sender]);
-             ExpectedCommission = expectedHours.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
-         }
-         
-         // get diffrent hours
-         uint diffHours = BokkyPooBahsDateTimeLibrary.diffHours(date, dateNow);
-         
-         // check if diffrent days > 0
-         if (diffHours > 0) {
-             uint elapsedHoursFromStart = BokkyPooBahsDateTimeLibrary.diffHours(StartDate[sender], dateNow);
-             if (elapsedHoursFromStart > stakeDuration) {
-                 if (LastWithdrawDate[sender] != 0) {
-                     diffHours = stakeDuration - BokkyPooBahsDateTimeLibrary.diffHours(StartDate[sender], LastWithdrawDate[sender]);
-                 } else {
-                     diffHours = stakeDuration;
-                 }
+         uint count = StakingInfo[sender].length;
+         for (uint i = 0; i < count; i++) {
+             ClaimedTotal                = StakingInfo[sender][i].Claimed;
+             StakedTotal                 = StakingInfo[sender][i].Staked;
+             StartDateValue              = StakingInfo[sender][i].StartDate;
+             LastWithdrawDateValue       = StakingInfo[sender][i].LastWithdrawDate;
+             
+             // date now
+             uint dateNow = now;
+             // date last withdraw 
+             uint date = StakingInfo[sender][i].LastWithdrawDate;
+             uint staked = StakingInfo[sender][i].Staked;
+             uint startdate = StakingInfo[sender][i].StartDate;
+             uint lastwithdraw = StakingInfo[sender][i].LastWithdrawDate;
+             if (lastwithdraw == 0) {
+                 date = StakingInfo[sender][i].StartDate;
+                 ExpectedCommission = stakeDuration.mul(staked).mul(dailyEarningPercent).div(10000);
+             } else {
+                 uint expectedHours = stakeDuration - BokkyPooBahsDateTimeLibrary.diffHours(startdate, lastwithdraw);
+                 ExpectedCommission = expectedHours.mul(staked).mul(dailyEarningPercent).div(10000);
              }
-             ClimableTokens = diffHours.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
-         } else {
-             ClimableTokens = 0;
+             
+             // get diffrent hours
+             uint diffHours = BokkyPooBahsDateTimeLibrary.diffHours(date, dateNow);
+             
+             // check if diffrent days > 0
+             if (diffHours > 0) {
+                 uint elapsedHoursFromStart = BokkyPooBahsDateTimeLibrary.diffHours(startdate, dateNow);
+                 if (elapsedHoursFromStart > stakeDuration) {
+                     if (lastwithdraw != 0) {
+                         diffHours = stakeDuration - BokkyPooBahsDateTimeLibrary.diffHours(startdate, lastwithdraw);
+                     } else {
+                         diffHours = stakeDuration;
+                     }
+                 }
+                 ClimableTokens = diffHours.mul(staked).mul(dailyEarningPercent).div(10000);
+             } else {
+                 ClimableTokens = 0;
+             }
+             strByte = abi.encodePacked(strByte, "{");
+             strByte = abi.encodePacked(strByte, uint2str(ClaimedTotal));
+             strByte = abi.encodePacked(strByte, ", ");
+             strByte = abi.encodePacked(strByte, uint2str(StakedTotal));
+             strByte = abi.encodePacked(strByte, ", ");
+             strByte = abi.encodePacked(strByte, uint2str(StartDateValue));
+             strByte = abi.encodePacked(strByte, ", ");
+             strByte = abi.encodePacked(strByte, uint2str(LastWithdrawDateValue));
+             strByte = abi.encodePacked(strByte, ", ");
+             strByte = abi.encodePacked(strByte, uint2str(ExpectedCommission));
+             strByte = abi.encodePacked(strByte, ", ");
+             strByte = abi.encodePacked(strByte, uint2str(ClimableTokens));
+             strByte = abi.encodePacked(strByte, "}");
+             if (i != count - 1) {
+                 strByte = abi.encodePacked(strByte, ",");
+             }
          }
+         string memory Info = string(strByte);
+         return Info;
     }
     
     function rewardDailyEarning() public {
          address sender = msg.sender;
          require(HasStake[sender], "Your wallet address don't have active Stake!");
          
-         if (LastWithdrawDate[sender] != 0) {
-             // diff days From Start Date To Last Withdraw Date
-             uint dw  = BokkyPooBahsDateTimeLibrary.diffHours(StartDate[sender], LastWithdrawDate[sender]);
-             // if dw highr from 300(default stakeDuration) Hour cann't get earning
-             require(dw < stakeDuration, " Your Stake duration has finished!");
-         }
-            
-         // date now
-         uint dateNow = now;
-
-         // date last withdraw 
-         uint date = LastWithdrawDate[sender];
-         if (LastWithdrawDate[sender] == 0) {  date = StartDate[sender]; }
-         
-         // get diffrent hours
-         uint diffHours = BokkyPooBahsDateTimeLibrary.diffHours(date, dateNow);
-         
-         // check if diffrent days > 0
-         require(diffHours > 0, "You can send withdraw request next hour"); 
-         
-         
-         uint elapsedHoursFromStart = BokkyPooBahsDateTimeLibrary.diffHours(StartDate[sender], dateNow);
-         if (elapsedHoursFromStart > stakeDuration) {
-             if (LastWithdrawDate[sender] != 0) {
-                 diffHours = stakeDuration - BokkyPooBahsDateTimeLibrary.diffHours(StartDate[sender], LastWithdrawDate[sender]);
-             } else {
-                 diffHours = stakeDuration;
+         uint count = StakingInfo[sender].length;
+         bool received = false;
+         for (uint i = 0; i < count; i++) {
+             if (StakingInfo[sender][i].LastWithdrawDate != 0) {
+                 // diff days From Start Date To Last Withdraw Date
+                 uint dw  = BokkyPooBahsDateTimeLibrary.diffHours(StakingInfo[sender][i].StartDate, StakingInfo[sender][i].LastWithdrawDate);
+                 // if dw highr from 300(default stakeDuration) Hour cann't get earning
+                 if (dw >= stakeDuration)
+                    continue;
              }
+                
+             // date now
+             uint dateNow = now;
+    
+             // date last withdraw 
+             uint date = StakingInfo[sender][i].LastWithdrawDate;
+             if (StakingInfo[sender][i].LastWithdrawDate == 0) {  date = StakingInfo[sender][i].StartDate; }
+             
+             // get diffrent hours
+             uint diffHours = BokkyPooBahsDateTimeLibrary.diffHours(date, dateNow);
+             
+             // check if diffrent days > 0
+             if (diffHours > 0) {
+                 uint elapsedHoursFromStart = BokkyPooBahsDateTimeLibrary.diffHours(StakingInfo[sender][i].StartDate, dateNow);
+                 if (elapsedHoursFromStart > stakeDuration) {
+                     if (StakingInfo[sender][i].LastWithdrawDate != 0) {
+                         diffHours = stakeDuration - BokkyPooBahsDateTimeLibrary.diffHours(StakingInfo[sender][i].StartDate, StakingInfo[sender][i].LastWithdrawDate);
+                     } else {
+                         diffHours = stakeDuration;
+                     }
+                 }
+                 
+                 // return amount so far
+                 uint256 returnAmount = diffHours.mul(StakingInfo[sender][i].Staked).mul(dailyEarningPercent).div(10000);
+                 
+                 // send daily earnings to sender 
+                 token.transferFrom(mainWallet, sender, returnAmount);
+                 
+                 // set last withdraw date 
+                 StakingInfo[sender][i].LastWithdrawDate = BokkyPooBahsDateTimeLibrary.addHours(date, diffHours);
+                 
+                 // set returned total 
+                 StakingInfo[sender][i].Claimed = StakingInfo[sender][i].Claimed + returnAmount;
+                 received = true;
+             } 
          }
-         
-         // return amount so far
-         uint256 returnAmount = diffHours.mul(Staked[sender]).mul(dailyEarningPercent).div(10000);
-         
-         // send daily earnings to sender 
-         token.transferFrom(mainWallet, sender, returnAmount);
-         
-         // set last withdraw date 
-         LastWithdrawDate[sender]  = BokkyPooBahsDateTimeLibrary.addHours(date, diffHours);
-         
-         // set returned total 
-         Claimed[sender]  = Claimed[sender] + returnAmount ;
+         require(received, "You can send withdraw request next hour;");
     }
 
     function setWithdrawAddress(address payable _address) external onlyOwner {
